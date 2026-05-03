@@ -160,6 +160,84 @@ class FileManager():
                 'modified_at': datetime_child,
                 'extension': child.suffix.lstrip('.')
             }
+    def search(
+            self, 
+            name: str | None = None,
+            extension: str | None = None,
+            min_size: int | None = None,
+            max_size: int | None = None,
+            contains: str | None = None, 
+            path: Path | None = None) -> Generator[dict, None, None]:
+            """
+            Search for files and directories within the root directory using multiple filters.
+
+            This method performs a lazy search (generator-based), yielding results as they are found,
+            without loading all data into memory.
+
+            Filters are combined using logical AND (all conditions must be satisfied).
+
+            Args:
+                name: Case-insensitive substring match against the file/directory name.
+                extension: Exact match for file extension (case-insensitive, with or without leading dot).
+                min_size: Minimum file size in bytes (inclusive).
+                max_size: Maximum file size in bytes (inclusive).
+                contains: Case-insensitive substring match across all fields (name, path, type, size, etc.).
+                path: Directory to search in. If None, defaults to the root directory.
+
+            Yields:
+                dict: A dictionary representing a file or directory with the following structure:
+                    {
+                        'name': str,
+                        'path': str,
+                        'type': 'file' | 'directory',
+                        'size': int,
+                        'modified_at': str,
+                        'extension': str
+                    }
+
+            Raises:
+                PermissionError: If the path is outside the root directory.
+                FileNotFoundError: If the path does not exist.
+                NotADirectoryError: If the path is not a directory.
+                ValueError: If min_size is greater than max_size.
+
+            Example:
+                >>> fm = FileManager('/home/user/documents')
+                >>> list(fm.search(name="report"))
+                >>> list(fm.search(extension="pdf", min_size=1000))
+                >>> list(fm.search(name="log", contains="2024", path=Path("logs")))
+            """
+            path = path or Path('.')
+            
+            predicates = []
+            
+            if name:
+                name_lower = name.lower()
+                predicates.append(lambda item: name_lower in item["name"].lower())
+
+            if extension:
+                ext_lower = extension.lower().lstrip(".")
+                predicates.append(lambda item: item["extension"].lower() == ext_lower)
+
+            if min_size is not None:
+                predicates.append(lambda item: item["size"] >= min_size)
+
+            if max_size is not None:
+                predicates.append(lambda item: item["size"] <= max_size)
+
+            if contains:
+                contains_lower = contains.lower()
+                predicates.append(
+                    lambda item: any(contains_lower in str(v).lower() for v in item.values())
+                )
+                
+            if min_size and max_size:
+                if min_size > max_size:
+                    raise ValueError('Minimum size must be lower than maximum size.') 
+            
+            for item in self.iter_directory(path):
+                if all(pred(item) for pred in predicates):
+                    yield item
 
     def list_directory(self, path: Path, order_by: str | None = None) -> dict:
         """
@@ -218,60 +296,7 @@ class FileManager():
             'data': data
         }
     
-    def search(self, value: str, keys: list[str] | None = None, path: Path | None = None) -> Generator[dict, None, None]:
-        """
-        Search for files and directories matching a value within the root.
-
-        Performs a case-insensitive partial match against all fields or specific fields.
-
-        Args:
-            value: The search term to match against.
-            keys: Optional list of fields to search in. If None, searches all fields.
-                Valid fields: name, path, type, size, modified_at, extension.
-            path: Optional directory to search in. Defaults to root directory.
-
-        Yield:
-            A dict for each matching item with the following structure:
-            {
-                'name': str,
-                'path': str,
-                'type': 'file' | 'directory',
-                'size': int,
-                'modified_at': str,
-                'extension': str
-            }
-
-        Raises:
-            PermissionError: If the path is outside the root directory.
-            FileNotFoundError: If the path does not exist.
-            NotADirectoryError: If the path is not a directory.
-            ValueError: If any key in keys is invalid.
-
-        Example:
-            >>> fm = FileManager('/home/victor/documents')
-            >>> list(fm.search('report'))
-            >>> list(fm.search('report', keys=['name']))
-            >>> list(fm.search('report', keys=['name'], path=Path('work')))
-        """
-        path = path or self._root_dir
-        value_lower = value.lower()    
         
-        if keys is not None:
-            for k in keys:
-                self._is_key_valid(k)
-                
-            def match(item):
-                return any(value_lower in str(item[k]).lower() for k in keys)
-        else:
-            def match(item):
-                return any(value_lower in str(v).lower() for v in item.values())
-        
-        for item in self.iter_directory(path):
-            if match(item):
-                yield item
         
 if __name__ == '__main__':
     fm = FileManager(Path.cwd())
-    data = fm.search(keys=['name'], value="TEST")
-    for item in data:
-        print(item)

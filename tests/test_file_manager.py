@@ -1,6 +1,8 @@
 import pytest
 from pathlib import Path
+from collections.abc import Generator
 from filemanager import FileManager
+
 
 class TestFileManagerInit:
     def test_raises_if_root_is_not_a_directory(self, tmp_path):
@@ -130,46 +132,83 @@ class TestListDirectoryOrderBy:
 
 
 class TestSearch:
-    def test_search_finds_partial_match(self, tmp_path):
+    def test_search_by_name(self, tmp_path):
         (tmp_path / 'relatorio.txt').touch()
         (tmp_path / 'outro.txt').touch()
         fm = FileManager(tmp_path)
-        result = list(fm.search('relat'))
+        result = list(fm.search(name='relat'))
         assert len(result) == 1
         assert result[0]['name'] == 'relatorio.txt'
 
-    def test_search_is_case_insensitive(self, tmp_path):
+    def test_search_by_name_is_case_insensitive(self, tmp_path):
         (tmp_path / 'Relatorio.txt').touch()
         fm = FileManager(tmp_path)
-        result = list(fm.search('relat'))
+        result = list(fm.search(name='relat'))
         assert len(result) == 1
 
     def test_search_returns_empty_if_no_match(self, tmp_path):
         (tmp_path / 'arquivo.txt').touch()
         fm = FileManager(tmp_path)
-        result = list(fm.search('naoexiste'))
+        result = list(fm.search(name='naoexiste'))
         assert result == []
 
-    def test_search_with_key(self, tmp_path):
+    def test_search_by_extension(self, tmp_path):
+        (tmp_path / 'file.pdf').touch()
+        (tmp_path / 'file.txt').touch()
+        fm = FileManager(tmp_path)
+        result = list(fm.search(extension='pdf'))
+        assert len(result) == 1
+        assert result[0]['extension'] == 'pdf'
+
+    def test_search_by_extension_without_dot(self, tmp_path):
+        (tmp_path / 'file.pdf').touch()
+        fm = FileManager(tmp_path)
+        result = list(fm.search(extension='.pdf'))
+        assert len(result) == 1
+
+    def test_search_by_min_size(self, tmp_path):
+        (tmp_path / 'small.txt').write_text('a')
+        (tmp_path / 'large.txt').write_text('a' * 1000)
+        fm = FileManager(tmp_path)
+        result = list(fm.search(min_size=500))
+        assert len(result) == 1
+        assert result[0]['name'] == 'large.txt'
+
+    def test_search_by_max_size(self, tmp_path):
+        (tmp_path / 'small.txt').write_text('a')
+        (tmp_path / 'large.txt').write_text('a' * 1000)
+        fm = FileManager(tmp_path)
+        result = list(fm.search(max_size=10))
+        assert len(result) == 1
+        assert result[0]['name'] == 'small.txt'
+
+    def test_search_min_size_greater_than_max_size_raises_value_error(self, tmp_path):
+        fm = FileManager(tmp_path)
+        with pytest.raises(ValueError):
+            list(fm.search(min_size=1000, max_size=100))
+
+    def test_search_by_contains(self, tmp_path):
         (tmp_path / 'relatorio.txt').touch()
         (tmp_path / 'outro.txt').touch()
         fm = FileManager(tmp_path)
-        result = list(fm.search('relat', keys=['name']))
+        result = list(fm.search(contains='relat'))
         assert len(result) == 1
-        assert result[0]['name'] == 'relatorio.txt'
 
-    def test_search_with_invalid_key_raises_value_error(self, tmp_path):
+    def test_search_combined_filters(self, tmp_path):
+        (tmp_path / 'relatorio.pdf').write_text('a' * 500)
+        (tmp_path / 'relatorio.txt').write_text('a')
+        (tmp_path / 'outro.pdf').write_text('a' * 500)
         fm = FileManager(tmp_path)
-        with pytest.raises(ValueError):
-            list(fm.search('test', keys=['invalid']))
+        result = list(fm.search(name='relatorio', extension='pdf'))
+        assert len(result) == 1
+        assert result[0]['name'] == 'relatorio.pdf'
 
     def test_search_outside_root_raises_permission_error(self, tmp_path):
         fm = FileManager(tmp_path)
         with pytest.raises(PermissionError):
-            list(fm.search('test', path=Path('/etc')))
+            list(fm.search(name='test', path=Path('/etc')))
 
     def test_search_returns_generator(self, tmp_path):
         fm = FileManager(tmp_path)
-        from collections.abc import Generator
-        result = fm.search('test')
+        result = fm.search(name='test')
         assert isinstance(result, Generator)
