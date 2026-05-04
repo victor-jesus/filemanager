@@ -136,9 +136,13 @@ class FileManager():
         Raises:
             FileNotFoundError: If the resolved path isn't a file/folder.
             NotADirectoryError: If the resolved path isn't a directory.   
+            
+        Note:
+            When recursive=True, each subdirectory is resolved and validated
+            against the root to prevent symlink-based path traversal attacks.
 
         Example:
-            >>> data = list(self.iter_directory(Path('example')), recursive=True)
+            >>> data = list(self.iter_directory(Path('example'), recursive=True))
         """
         resolved_path = self._safe_resolve(path)
         if not resolved_path.exists():
@@ -183,89 +187,91 @@ class FileManager():
                         stack.append(resolved_child)
               
     def search(
-            self, 
-            name: str | None = None,
-            extension: str | None = None,
-            min_size: int | None = None,
-            max_size: int | None = None,
-            contains: str | None = None, 
-            recursive: bool = False,
-            path: Path | None = None) -> Generator[dict, None, None]:
-            """
-            Search for files and directories within the root directory using multiple filters.
+        self, 
+        name: str | None = None,
+        extension: str | None = None,
+        min_size: int | None = None,
+        max_size: int | None = None,
+        contains: str | None = None, 
+        recursive: bool = False,
+        path: Path | None = None) -> Generator[dict, None, None]:
+        """
+        Search for files and directories within the root directory using multiple filters.
 
-            This method performs a lazy search (generator-based), yielding results as they are found,
-            without loading all data into memory.
+        This method performs a lazy search (generator-based), yielding results as they are found,
+        without loading all data into memory.
 
-            Filters are combined using logical AND (all conditions must be satisfied).
+        Filters are combined using logical AND (all conditions must be satisfied).
 
-            Args:
-                name: Case-insensitive substring match against the file/directory name.
-                extension: Exact match for file extension (case-insensitive, with or without leading dot).
-                min_size: Minimum file size in bytes (inclusive).
-                max_size: Maximum file size in bytes (inclusive).
-                contains: Case-insensitive substring match across all fields (name, path, type, size, etc.).
-                path: Directory to search in. If None, defaults to the root directory.
+        Args:
+            name: Case-insensitive substring match against the file/directory name.
+            extension: Exact match for file extension (case-insensitive, with or without leading dot).
+            min_size: Minimum file size in bytes (inclusive).
+            max_size: Maximum file size in bytes (inclusive).
+            contains: Case-insensitive substring match across all fields (name, path, type, size, etc.).
+            path: Directory to search in. If None, defaults to the root directory.
 
-            Yields:
-                dict: A dictionary representing a file or directory with the following structure:
-                    {
-                        'name': str,
-                        'path': str,
-                        'type': 'file' | 'directory',
-                        'size': int,
-                        'modified_at': str,
-                        'extension': str
-                    }
+        Yields:
+            dict: A dictionary representing a file or directory with the following structure:
+                {
+                    'name': str,
+                    'path': str,
+                    'type': 'file' | 'directory',
+                    'size': int,
+                    'modified_at': str,
+                    'extension': str
+                }
 
-            Raises:
-                PermissionError: If the path is outside the root directory.
-                FileNotFoundError: If the path does not exist.
-                NotADirectoryError: If the path is not a directory.
-                ValueError: If min_size is greater than max_size.
+        Raises:
+            PermissionError: If the path is outside the root directory.
+            FileNotFoundError: If the path does not exist.
+            NotADirectoryError: If the path is not a directory.
+            ValueError: If min_size is greater than max_size.
 
-            Example:
-                >>> fm = FileManager('/home/user/documents')
-                >>> list(fm.search(name="report"))
-                >>> list(fm.search(extension="pdf", min_size=1000))
-                >>> list(fm.search(name="log", contains="2024", path=Path("logs")))
-            """
-            path = path or Path('.')
+        Example:
+            >>> fm = FileManager('/home/user/documents')
+            >>> list(fm.search(name="report"))
+            >>> list(fm.search(extension="pdf", min_size=1000))
+            >>> list(fm.search(name="log", contains="2024", path=Path("logs")))
+        """
+        if min_size is not None and max_size is not None:
+            if min_size > max_size:
+                raise ValueError('Minimum size must be lower than maximum size.') 
             
-            predicates = []
+        path = path or Path('.')
+        
+        predicates = []
+        
+        if name:
+            name_lower = name.lower()
+            predicates.append(lambda item: name_lower in item["name"].lower())
+
+        if extension:
+            ext_lower = extension.lower().lstrip(".")
+            predicates.append(lambda item: item["extension"].lower() == ext_lower)
+
+        if min_size is not None:
+            predicates.append(lambda item: item["size"] >= min_size)
+
+        if max_size is not None:
+            predicates.append(lambda item: item["size"] <= max_size)
             
-            if name:
-                name_lower = name.lower()
-                predicates.append(lambda item: name_lower in item["name"].lower())
-
-            if extension:
-                ext_lower = extension.lower().lstrip(".")
-                predicates.append(lambda item: item["extension"].lower() == ext_lower)
-
-            if min_size is not None:
-                predicates.append(lambda item: item["size"] >= min_size)
-
-            if max_size is not None:
-                predicates.append(lambda item: item["size"] <= max_size)
-
-            if contains:
-                contains_lower = contains.lower()
-                predicates.append(
-                    lambda item: any(contains_lower in str(v).lower() for v in item.values())
-                )
-                
-            if min_size and max_size:
-                if min_size > max_size:
-                    raise ValueError('Minimum size must be lower than maximum size.') 
+        if contains:
+            contains_lower = contains.lower()
+            predicates.append(
+                lambda item: any(contains_lower in str(v).lower() for v in item.values())
+            )
             
-            for item in self.iter_directory(path, recursive):
-                if all(pred(item) for pred in predicates):
-                    yield item
+        
+        for item in self.iter_directory(path, recursive):
+            if all(pred(item) for pred in predicates):
+                yield item
 
-    def list_directory(self, 
-                       path: Path, 
-                       recursive: bool = False, 
-                       order_by: str | None = None) -> dict:
+    def list_directory(
+        self, 
+        path: Path, 
+        recursive: bool = False, 
+        order_by: str | None = None) -> dict:
         """
         Lists the contents of a directory within the root.
 
@@ -273,6 +279,7 @@ class FileManager():
             path: The directory path to list. Can be relative to root or absolute.
             order_by: Optional field to sort results by. Prefix with '-' for descending.
                       Valid fields: name, path, type, size, modified_at, extension.
+            recursive: indicates if must iterate through directories recursively.
 
         Returns:
             A dict with the following structure:
