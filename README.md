@@ -12,6 +12,7 @@ A Python library for safe file system operations within a root directory.
 - Configurable date format and sortable fields
 - Sortable results by any field, ascending or descending
 - Recursive directory traversal with symlink protection
+- Suport for hidden files/folders.
 
 ## Installation
 
