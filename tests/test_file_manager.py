@@ -154,7 +154,7 @@ class TestSymbolicLinks:
         fm = FileManager(symlink_structure)
         result = list(fm.search(name="link_to_file", allow_symbolic_links=True))
         assert len(result) == 1
-        assert result[0].is_link is True
+        assert result[0]['is_symbolic_link'] is True
 
     def test_search_excludes_symlinks_by_default(self, symlink_structure):
         fm = FileManager(symlink_structure)
@@ -208,7 +208,7 @@ class TestSearch:
         fm = FileManager(tmp_path)
         result = list(fm.search(name='repo'))
         assert len(result) == 1
-        assert result[0].name == 'report.txt'
+        assert result[0]['name'] == 'report.txt'
 
     def test_search_by_name_is_case_insensitive(self, tmp_path):
         (tmp_path / 'report.txt').touch()
@@ -228,7 +228,7 @@ class TestSearch:
         fm = FileManager(tmp_path)
         result = list(fm.search(extension='pdf'))
         assert len(result) == 1
-        assert result[0].extension == 'pdf'
+        assert result[0]['extension'] == 'pdf'
 
     def test_search_by_extension_without_dot(self, tmp_path):
         (tmp_path / 'file.pdf').touch()
@@ -242,7 +242,7 @@ class TestSearch:
         fm = FileManager(tmp_path)
         result = list(fm.search(min_size=500))
         assert len(result) == 1
-        assert result[0].name == 'large.txt'
+        assert result[0]['name'] == 'large.txt'
 
     def test_search_by_max_size(self, tmp_path):
         (tmp_path / 'small.txt').write_text('a')
@@ -250,7 +250,7 @@ class TestSearch:
         fm = FileManager(tmp_path)
         result = list(fm.search(max_size=10))
         assert len(result) == 1
-        assert result[0].name == 'small.txt'
+        assert result[0]['name'] == 'small.txt'
 
     def test_search_min_size_greater_than_max_size_raises_value_error(self, tmp_path):
         fm = FileManager(tmp_path)
@@ -271,7 +271,7 @@ class TestSearch:
         fm = FileManager(tmp_path)
         result = list(fm.search(name='report', extension='pdf'))
         assert len(result) == 1
-        assert result[0].name == 'report.pdf'
+        assert result[0]['name'] == 'report.pdf'
 
     def test_search_outside_root_raises_permission_error(self, tmp_path):
         fm = FileManager(tmp_path)
@@ -291,7 +291,7 @@ class TestSearchRecursive:
         fm = FileManager(tmp_path)
         result = list(fm.search(name="report", recursive=True))
         assert len(result) == 1
-        assert result[0].name == "report.txt"
+        assert result[0]['name'] == "report.txt"
 
     def test_search_non_recursive_ignores_nested_file(self, tmp_path):
         nested = tmp_path / "folder"
@@ -308,7 +308,7 @@ class TestSearchRecursive:
         (tmp_path / "shallow.txt").touch()
         fm = FileManager(tmp_path)
         result = list(fm.search(name=".txt", recursive=True))
-        names = [item.name for item in result]
+        names = [item['name'] for item in result]
         assert "deep.txt" in names
         assert "shallow.txt" in names
 
@@ -317,7 +317,7 @@ class TestSearchRecursive:
         (tmp_path / "reports" / "sub_reports").mkdir()
         fm = FileManager(tmp_path)
         result = list(fm.search(name="reports", recursive=True))
-        names = [item.name for item in result]
+        names = [item['name'] for item in result]
         assert "reports" in names
         assert "sub_reports" in names
 
@@ -328,7 +328,7 @@ class TestSearchHiddenFiles:
         (tmp_path / "visible.txt").touch()
         fm = FileManager(tmp_path)
         result = list(fm.search())
-        names = [item.name for item in result]
+        names = [item['name'] for item in result]
         assert ".hidden.txt" not in names
         assert "visible.txt" in names
 
@@ -336,7 +336,7 @@ class TestSearchHiddenFiles:
         (tmp_path / ".hidden.txt").touch()
         fm = FileManager(tmp_path)
         result = list(fm.search(hidden_files=True))
-        names = [item.name for item in result]
+        names = [item['name'] for item in result]
         assert ".hidden.txt" in names
 
     def test_search_hidden_combined_with_name(self, tmp_path):
@@ -344,7 +344,7 @@ class TestSearchHiddenFiles:
         (tmp_path / "public_report.txt").touch()
         fm = FileManager(tmp_path)
         result = list(fm.search(name="report", hidden_files=True))
-        names = [item.name for item in result]
+        names = [item['name'] for item in result]
         assert ".secret_report.txt" in names
         assert "public_report.txt" in names
 
@@ -355,14 +355,14 @@ class TestSearchSizeBoundary:
         fm = FileManager(tmp_path)
         result = list(fm.search(min_size=100))
         assert len(result) == 1
-        assert result[0].name == "exact.txt"
+        assert result[0]['name'] == "exact.txt"
 
     def test_search_max_size_inclusive(self, tmp_path):
         (tmp_path / "exact.txt").write_text("a" * 100)
         fm = FileManager(tmp_path)
         result = list(fm.search(max_size=100))
         assert len(result) == 1
-        assert result[0].name == "exact.txt"
+        assert result[0]['name'] == "exact.txt"
 
     def test_search_size_range(self, tmp_path):
         (tmp_path / "small.txt").write_text("a" * 10)
@@ -371,7 +371,7 @@ class TestSearchSizeBoundary:
         fm = FileManager(tmp_path)
         result = list(fm.search(min_size=100, max_size=1000))
         assert len(result) == 1
-        assert result[0].name == "medium.txt"
+        assert result[0]['name'] == "medium.txt"
 
     def test_search_min_size_zero_returns_all(self, tmp_path):
         (tmp_path / "file.txt").touch()
@@ -389,7 +389,7 @@ class TestSearchPath:
         fm = FileManager(tmp_path)
         result = list(fm.search(path=Path("sub")))
         assert len(result) == 1
-        assert result[0].name == "target.txt"
+        assert result[0]['name'] == "target.txt"
 
     def test_search_path_not_found_raises(self, tmp_path):
         fm = FileManager(tmp_path)
@@ -421,7 +421,7 @@ class TestSearchSymlinks:
         fm = FileManager(symlink_structure)
         result = list(fm.search(name="link_to_report", allow_symbolic_links=True))
         assert len(result) == 1
-        assert result[0].is_link is True
+        assert result[0]['is_symbolic_link'] is True
 
     def test_search_symlink_outside_root_is_ignored(self, tmp_path):
         outside = tmp_path.parent / "outside.txt"
@@ -429,7 +429,7 @@ class TestSearchSymlinks:
         (tmp_path / "evil_link.txt").symlink_to(outside)
         fm = FileManager(tmp_path)
         result = list(fm.search(allow_symbolic_links=True))
-        names = [item.name for item in result]
+        names = [item['name'] for item in result]
         assert "evil_link.txt" not in names
 
 

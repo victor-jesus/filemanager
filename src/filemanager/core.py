@@ -109,7 +109,7 @@ class FileManager():
             is_dir=is_dir
         )
     
-    def iter_directory(
+    def _iter_directory(
         self, 
         path: Path, 
         allow_symbolic_links: bool = False,
@@ -182,7 +182,7 @@ class FileManager():
         allow_symbolic_links: bool = False,
         hidden_files: bool = False, 
         recursive: bool = False,
-        path: Path | None = None) -> Generator[FileEntry, None, None]:
+        path: Path | None = None) -> Generator[dict, None, None]:
         """
         Searches for files and directories using multiple filters.
         This method is lazy (generator-based), yielding results incrementally.
@@ -248,9 +248,14 @@ class FileManager():
                 )
             )
             
-        for entry in self.iter_directory(path, hidden_files=hidden_files, allow_symbolic_links=allow_symbolic_links, recursive=recursive):
+        for entry in self._iter_directory(path, hidden_files=hidden_files, allow_symbolic_links=allow_symbolic_links, recursive=recursive):
             if all(pred(entry) for pred in predicates):
-                yield entry
+                data = serialize_entry(
+                    entry, 
+                    root_dir=self._root_dir,
+                    dt_template=self.DT_TEMPLATE
+                )
+                yield data
 
     def list_directory(
         self, 
@@ -285,7 +290,7 @@ class FileManager():
             >>> fm.list_directory(Path('.'))
             >>> fm.list_directory(Path('.'), recursive=True, order_by='-size')
         """
-        entries = list(self.iter_directory(
+        entries = list(self._iter_directory(
             path, 
             hidden_files=hidden_files, 
             recursive=recursive, 
@@ -322,6 +327,3 @@ class FileManager():
     
 if __name__ == '__main__':
     fm = FileManager(Path.cwd().parent.parent)
-    data = fm.list_directory(Path('src'), allow_symbolic_links=False, recursive=True)
-    for item in data['data']:
-        print(item['name'])
